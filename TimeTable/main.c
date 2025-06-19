@@ -13,11 +13,13 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h> // gethostbyname
+#include <time.h>
+#include <ctype.h>
 
 #include "parson.h" // JSON 파싱 라이브러리
 
 
-#define RECV_BUFFER_SIZE 4096 // 서버 응답을 받을 버퍼 크기
+#define RECV_BUFFER_SIZE 8192 // 서버 응답을 받을 버퍼 크기
 // 학교 정보 구조체 정의
 typedef struct {
     char edu_code[16];    // 교육청 코드 (ATPT_OFCDC_SC_CODE)
@@ -36,137 +38,27 @@ char g_selected_school_name[128] = ""; // 선택된 학교 이름
 #define MAX_SCHOOLS 100
 #define MAX_FIELD_LEN 128 // 각 필드의 최대 길이
 
-int extract_value_for_key(char **json_ptr, const char *key_name, char *output_buffer, size_t buffer_size) {
-    char search_key[MAX_FIELD_LEN + 4]; // "key_name": 형태를 찾기 위함
-    sprintf(search_key, "\"%s\":", key_name);
+void trim_whitespace(char *str) {
+    if (str == NULL) return;
     
-    char *key_pos = strstr(*json_ptr, search_key);
-    if (!key_pos) {
-        // fprintf(stderr, "Key '%s' not found.\n", key_name); // 디버깅용
-        return 0;
+    // Trim leading whitespace
+    char *start = str;
+    while (*start && (isspace((unsigned char)*start) || (unsigned char)*start == 0xEF || (unsigned char)*start == 0xBB || (unsigned char)*start == 0xBF)) {
+        // isspace()로 공백문자 제거, 0xEF, 0xBB, 0xBF는 UTF-8 BOM
+        start++;
     }
     
-    // 키를 찾았으면, 값의 시작인 다음 따옴표를 찾습니다.
-    char *value_start = strchr(key_pos + strlen(search_key), '"');
-    if (!value_start) return 0;
-    value_start++; // 따옴표 다음 문자부터 시작
-    
-    char *value_end = strchr(value_start, '"');
-    if (!value_end) return 0;
-    
-    size_t len = value_end - value_start;
-    if (len >= buffer_size) {
-        len = buffer_size - 1; // 버퍼 오버플로우 방지
+    // Trim trailing whitespace
+    char *end = str + strlen(str) - 1;
+    while (end >= start && (isspace((unsigned char)*end) || (unsigned char)*end == 0xEF || (unsigned char)*end == 0xBB || (unsigned char)*end == 0xBF)) {
+        end--;
     }
-    strncpy(output_buffer, value_start, len);
-    output_buffer[len] = '\0'; // 널 종료
+    *(end + 1) = '\0'; // Null-terminate the string
     
-    *json_ptr = value_end + 1; // json_ptr 업데이트
-    return 1;
-}
-
-/**
- * @brief 주어진 JSON 문자열에서 학교 정보 목록을 파싱합니다.
- * "schoolInfo" -> "row" 경로를 따라 데이터를 찾습니다.
- * @param json_string 파싱할 JSON 문자열.
- * @param schools 파싱된 학교 정보를 저장할 SchoolInfo 배열.
- * @param max_schools schools 배열의 최대 크기.
- * @return 파싱된 학교 정보의 수, 오류 발생 시 -1.
- */
-int parse_complex_school_json(const char *json_string, SchoolInfo *schools, int max_schools) {
-    char *json_mutable = strdup(json_string); // 원본 문자열을 수정하지 않기 위해 복사
-    if (!json_mutable) {
-        perror("Memory allocation failed for json_mutable");
-        return -1;
+    // Shift the string if leading whitespace was trimmed
+    if (start != str) {
+        memmove(str, start, strlen(start) + 1);
     }
-    char *current_pos = json_mutable;
-    int school_count = 0;
-    
-    // 1. "schoolInfo" 키 찾기
-    current_pos = strstr(current_pos, "\"schoolInfo\":");
-    if (!current_pos) {
-        fprintf(stderr, "ERROR: 'schoolInfo' key not found.\n");
-        free(json_mutable);
-        return -1;
-    }
-    current_pos += strlen("\"schoolInfo\":"); // "schoolInfo": 다음으로 이동
-    
-    // 2. "schoolInfo" 배열의 시작 '[' 찾기
-    current_pos = strchr(current_pos, '[');
-    if (!current_pos) {
-        fprintf(stderr, "ERROR: 'schoolInfo' array start '[' not found.\n");
-        free(json_mutable);
-        return -1;
-    }
-    current_pos++; // '[' 다음으로 이동
-    
-    // 3. "row" 키 찾기 (이 예시에서는 schoolInfo 배열의 두 번째 요소에 있다고 가정)
-    //    이 부분을 더 견고하게 하려면, schoolInfo 배열을 순회하며 'row' 키를 가진 객체를 찾아야 함.
-    current_pos = strstr(current_pos, "\"row\":");
-    if (!current_pos) {
-        fprintf(stderr, "ERROR: 'row' key not found.\n");
-        free(json_mutable);
-        return -1;
-    }
-    current_pos += strlen("\"row\":"); // "row": 다음으로 이동
-    
-    // 4. "row" 배열의 시작 '[' 찾기
-    current_pos = strchr(current_pos, '[');
-    if (!current_pos) {
-        fprintf(stderr, "ERROR: 'row' array start '[' not found.\n");
-        free(json_mutable);
-        return -1;
-    }
-    current_pos++; // '[' 다음으로 이동
-    
-    // 5. 각 학교 정보 객체 순회
-    //    '{'를 찾아 각 객체의 시작을 식별
-    while (school_count < max_schools && (current_pos = strchr(current_pos, '{'))) {
-        current_pos++; // '{' 다음으로 이동 (객체 시작)
-        
-        // 각 필드 추출
-        if (!extract_value_for_key(&current_pos, "ATPT_OFCDC_SC_CODE", schools[school_count].edu_code, sizeof(schools[school_count].edu_code))) {
-            fprintf(stderr, "ERROR: Failed to extract ATPT_OFCDC_SC_CODE for school %d\n", school_count);
-            // break; // 오류 발생 시 바로 중단
-        }
-        if (!extract_value_for_key(&current_pos, "SD_SCHUL_CODE", schools[school_count].school_code, sizeof(schools[school_count].school_code))) {
-            fprintf(stderr, "ERROR: Failed to extract SD_SCHUL_CODE for school %d\n", school_count);
-            // break;
-        }
-        if (!extract_value_for_key(&current_pos, "SCHUL_NM", schools[school_count].school_name, sizeof(schools[school_count].school_name))) {
-            fprintf(stderr, "ERROR: Failed to extract SCHUL_NM for school %d\n", school_count);
-            // break;
-        }
-        
-        school_count++;
-        
-        // 현재 객체의 끝 '}'을 찾기
-        current_pos = strchr(current_pos, '}');
-        if (!current_pos) {
-            fprintf(stderr, "ERROR: Invalid JSON format - missing '}' for object.\n");
-            break;
-        }
-        current_pos++; // '}' 다음으로 이동
-        
-        // 다음 객체 또는 배열 끝을 식별
-        char *next_comma = strchr(current_pos, ',');
-        char *next_bracket = strchr(current_pos, ']'); // 'row' 배열의 끝 ']'
-        
-        if (next_comma && (!next_bracket || next_comma < next_bracket)) {
-            // 다음 학교 데이터가 있음
-            current_pos = next_comma + 1;
-        } else if (next_bracket) {
-            // 'row' 배열의 끝에 도달
-            break;
-        } else {
-            // 예상치 못한 종료 또는 잘못된 형식
-            fprintf(stderr, "ERROR: Invalid JSON format - unexpected end or character after object.\n");
-            break;
-        }
-    }
-    
-    free(json_mutable);
-    return school_count;
 }
 
 char* getURL(char *hostname, char *path, int port) {
@@ -291,7 +183,7 @@ char* getURL(char *hostname, char *path, int port) {
     return response_body;
 }
 
-char* searchNEISSchool(char *schoolName) {
+int searchNEISSchool(char *schoolName) {
     char full_path[256];
     // strcat은 첫 번째 인자(대상)에 두 번째 인자(원본)를 이어붙이고 첫 번째 인자를 반환합니다.
     // 따라서 안전하게 사용하려면 충분한 버퍼를 먼저 만들고 sprintf 등을 사용해야 합니다.
@@ -301,11 +193,11 @@ char* searchNEISSchool(char *schoolName) {
     char* json_response = getURL("cors-proxy.jsna.workers.dev", full_path, 80);
     
     if (json_response == NULL) {
-        fprintf(stderr, "Failed to get school search JSON response.\n");
-        return NULL; // 검색 실패
+        fprintf(stderr, "잘못된 응답\n");
+        return -1; // 검색 실패
     }
     
-    printf("\nReceived JSON response:\n%s\n", json_response);
+    printf("\nJSON 응답:\n%s\n", json_response);
     
     SchoolInfo schools[MAX_SEARCH_RESULTS];
     int num_schools = 0;
@@ -313,25 +205,25 @@ char* searchNEISSchool(char *schoolName) {
     // JSON 파싱 시작
     JSON_Value *root_value = json_parse_string(json_response);
     if (root_value == NULL) {
-        fprintf(stderr, "ERROR: Failed to parse JSON string.\n");
+        fprintf(stderr, "ERROR: JSON 파싱 실패\n");
         free(json_response);
-        return NULL;
+        return -1;
     }
     
     JSON_Object *root_object = json_value_get_object(root_value);
     if (root_object == NULL) {
-        fprintf(stderr, "ERROR: Root is not an object.\n");
+        fprintf(stderr, "ERROR: 잘못된 형식\n");
         json_value_free(root_value);
         free(json_response);
-        return NULL;
+        return -1;
     }
     
     JSON_Array *school_info_array = json_object_get_array(root_object, "schoolInfo");
     if (school_info_array == NULL) {
-        fprintf(stderr, "ERROR: 'schoolInfo' array not found.\n");
+        fprintf(stderr, "ERROR: 'schoolInfo' 찾기 실패\n");
         json_value_free(root_value);
         free(json_response);
-        return NULL;
+        return -1;
     }
     
     // "schoolInfo" 배열 내에서 'row' 배열을 포함하는 객체를 찾습니다.
@@ -349,10 +241,10 @@ char* searchNEISSchool(char *schoolName) {
     }
     
     if (row_array == NULL) {
-        fprintf(stderr, "ERROR: 'row' array not found within 'schoolInfo'.\n");
+        fprintf(stderr, "ERROR: 'schoolInfo'에서 'row' 찾기 실패.\n");
         json_value_free(root_value);
         free(json_response);
-        return NULL;
+        return -1;
     }
     
     // "row" 배열 순회하며 각 학교 정보 추출
@@ -399,27 +291,26 @@ char* searchNEISSchool(char *schoolName) {
     free(json_response); // getURL에서 할당한 응답 본문 메모리 해제
     
     if (num_schools == 0) {
-        printf("No schools found for '%s'.\n", schoolName);
-        return NULL;
+        printf("'%s' 학교를 찾을 수 없습니다.\n", schoolName);
+        return -1;
     }
     
     // 사용자에게 학교 선택 요청
-    printf("\n--- Search Results for '%s' ---\n", schoolName);
+    printf("\n--- '%s' 검색 결과 ---\n", schoolName);
     for (int j = 0; j < num_schools; ++j) {
         printf("%d. %s (교육청: %s, 코드: %s)\n", j + 1,
                schools[j].school_name, schools[j].edu_code, schools[j].school_code);
         printf("   주소: %s\n", schools[j].address); // 주소 출력
-
+        
     }
     
     int choice;
-    printf("Please enter the number of the school you want to select (1-%d): ", num_schools);
-    // 사용자 입력이 숫자가 아니거나 범위를 벗어나는 경우에 대한 강력한 유효성 검사 필요
+    printf("학교를 선택해 주세요. (1-%d 번호 입력): ", num_schools);
     if (scanf("%d", &choice) != 1 || choice < 1 || choice > num_schools) {
-        printf("Invalid selection. Please try again.\n");
+        printf("올바르지 않은 선택입니다.\n");
         // 유효하지 않은 선택이므로 전역 변수에 저장하지 않고 실패 반환
         // TODO: 재시도 로직 추가 가능
-        return NULL;
+        return -1;
     }
     
     // 선택된 학교 정보 전역 변수에 저장
@@ -433,17 +324,129 @@ char* searchNEISSchool(char *schoolName) {
     // 버퍼 비우기 (scanf 후 남은 개행 문자 처리)
     while (getchar() != '\n');
     
-    printf("\nSelected School:\n");
+    printf("\n선택된 학교:\n");
     printf("  교육청 코드: %s\n", g_selected_edu_code);
     printf("  학교 코드: %s\n", g_selected_school_code);
     printf("  학교 이름: %s\n", g_selected_school_name);
     
-    return (char*)1; // 성공을 나타내는 임의의 non-NULL 값 반환. 실제 데이터는 전역 변수에 저장됨.
-    // (혹은 int 반환형으로 변경하여 0/1을 반환하는 것이 더 자연스러움)
+    return 0;
 }
-char* getNEISTimeTable(void) { // NEIS OpenAPI를 이용해 시간표를 가져오기
+
+int parseCSVHeader(const char *csvString, const char *searchHeader) {
+    if (csvString == NULL || *csvString == '\0') {
+        printf("입력된 CSV 문자열이 비어있습니다.\n");
+        return -1;
+    }
     
-    return "";
+    // strtok은 원본 문자열을 변경하므로 복사본을 생성합니다.
+    char *csvCopy = strdup(csvString);
+    if (csvCopy == NULL) {
+        printf("메모리 할당에 실패했습니다.\n");
+        return -1;
+    }
+    
+    // 첫 번째 줄(헤더)만 추출합니다.
+    char *header = strtok(csvCopy, "\n\r"); // \r (캐리지 리턴)도 처리
+    
+    if (header != NULL) {
+        // BOM(Byte Order Mark) 제거 (UTF-8 with BOM)
+        if ((unsigned char)header[0] == 0xEF &&
+            (unsigned char)header[1] == 0xBB &&
+            (unsigned char)header[2] == 0xBF) {
+            memmove(header, header + 3, strlen(header) - 2); // strlen(header)-3+1
+        }
+        
+        char *token;
+        int index = 0;
+        
+        // 헤더 문자열을 ',' 기준으로 토큰화하여 검색 시작
+        token = strtok(header, ",");
+        
+        while (token != NULL) {
+            // 양 끝의 공백을 제거하는 로직이 필요하다면 여기에 추가할 수 있습니다.
+            // 예: trim(token);
+            
+            if (strcmp(token, searchHeader) == 0) {
+                free(csvCopy); // 함수 종료 전 메모리 해제
+                return index;
+            }
+            token = strtok(NULL, ",");
+            index++;
+        }
+        
+        printf("'%s' 헤더를 찾을 수 없습니다.\n", searchHeader);
+        free(csvCopy); // 함수 종료 전 메모리 해제
+        return -1;
+    } else {
+        printf("CSV 문자열에서 헤더를 추출할 수 없습니다.\n");
+        free(csvCopy); // 함수 종료 전 메모리 해제
+        return -1;
+    }
+}
+
+
+int getNEISTimeTable(int grade, int class) {
+    char full_path[256] = "";
+    
+    // 현재 날짜를 가져와 YYYYMMDD 형식으로 포맷팅
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    char start_date[9];
+    char end_date[9]; // NEIS API는 시작일과 종료일을 요구함. 여기서는 한 주를 기준으로.
+    
+    // 오늘의 날짜
+    strftime(start_date, sizeof(start_date), "%Y%m%d", tm_info);
+    
+    // 일주일 후의 날짜 (간단하게 계산, 월말/연말 처리 필요 시 복잡해짐)
+    // 여기서는 단순히 오늘부터 6일 후로 계산
+    // 더 정확한 계산을 위해서는 mktime과 struct tm 조작이 필요
+    tm_info->tm_mday += 6;
+    mktime(tm_info); // mktime으로 tm_info를 정규화하여 월, 일 등을 업데이트
+    strftime(end_date, sizeof(end_date), "%Y%m%d", tm_info);
+    
+    
+    // sprintf를 사용하여 URL 경로를 만듭니다.
+    // 날짜 매개변수 추가 (fy: from_ymd, ty: to_ymd)
+    sprintf(full_path, "/https://hello.jsna.dev/timetable/get-timetable.php?oc=%s&sc=%s&gd=%d&cl=%d&fy=%s&ty=%s",
+            g_selected_edu_code, g_selected_school_code, grade, class, start_date, end_date);
+    //response is csv
+    
+    char* csv_response = getURL("cors-proxy.jsna.workers.dev", full_path, 80);
+    if (csv_response == NULL) {
+        fprintf(stderr, "잘못된 HTTP 응답\n");
+        return -1; // 시간표 가져오기 실패
+    }
+    
+    // 앞에 있는 43fe\r\n 같은 데이터 제거: 첫번째 \r\n 찾아서 그 앞에 다 날리기
+    char *start_ptr = strstr(csv_response, "\r\n");
+    if (start_ptr != NULL) {
+        // 첫 번째 중괄호 위치를 찾았으므로 그 앞의 데이터를 제거
+        csv_response = start_ptr;
+    }
+
+    int dateCol = parseCSVHeader(csv_response, "ALL_TI_YMD"); // 시간표일자
+    int timeCol = parseCSVHeader(csv_response, "PERIO"); // 교시
+    int subjectCol = parseCSVHeader(csv_response, "ITRT_CNTNT"); // 수업내용
+    
+    char line[1024] = {0}; // CSV 파일의 각 행을 저장할 버퍼
+    // 각 행에는 날짜, 교시, 수업내용이 포함되어 있음.
+    // 이것을 기반으로 정렬 후 테이블 형식으로 출력 (월~금)
+    printf("\n\n--- 시간표 ---\n");
+    printf("학년: %d, 반: %d\n", grade, class);
+    printf("날짜: %s ~ %s\n", start_date, end_date);
+    printf("--------------------------------------------------\n");
+    printf("| 교시 | 월요일 | 화요일 | 수요일 | 목요일 | 금요일 |\n");
+    printf("--------------------------------------------------\n");
+    
+    // 5*7 배열로 교시별로 수업 내용을 저장
+    char *timetable[5][7] = {{""}}; // 5교시, 7일 (월~금)
+    char *line_ptr = csv_response;
+    // dateCol, timeCol, subjectCol은 parseCSVHeader에서 찾은 인덱스입니다.
+    // 각 행을 반복하며 시간표를 채웁니다. ss
+    
+                  
+    return 0;
+    
 }
 
 int updateSavedSchool(void) {
@@ -452,11 +455,11 @@ int updateSavedSchool(void) {
     printf("학교 이름을 입력하세요: ");
     if (fgets(school_name_input, sizeof(school_name_input), stdin) == NULL) {
         fprintf(stderr, "입력 인식 실패\n");
-        return 1;
+        return -1;
     }
     school_name_input[strcspn(school_name_input, "\n")] = '\0'; // 개행 문자 제거
     
-    if (searchNEISSchool(school_name_input) != NULL) {
+    if (searchNEISSchool(school_name_input) != -1) {
         printf("\n학교 선택 완료\n");
         printf("학교 정보:\n");
         printf("  교육청 코드: %s\n", g_selected_edu_code);
@@ -470,11 +473,11 @@ int updateSavedSchool(void) {
             return 0;
         } else {
             fprintf(stderr, "파일을 저장할 수 없습니다.\n");
-            return 1; // 파일 저장 실패
+            return -1; // 파일 저장 실패
         }
     } else {
         fprintf(stderr, "학교 검색 실패\n");
-        return 1; // 학교 검색 실패
+        return -1; // 학교 검색 실패
     }
     
 }
@@ -516,5 +519,21 @@ int main(int argc, const char * argv[]) {
         updateSavedSchool(); // 학교 정보 업데이트 함수 호출
     }
     
+    int grade, class;
+    printf("학년을 입력해 주세요: ");
+    if (scanf("%d", &grade) != 1 || grade < 1) {
+        fprintf(stderr, "올바르지 않은 학년입니다.\n");
+        return -1; // 유효하지 않은 학년 입력
+    }
+    printf("반을 입력해 주세요: ");
+    if (scanf("%d", &class) != 1 || class < 1) {
+        fprintf(stderr, "올바르지 않은 반입니다.\n");
+        return -1; // 유효하지 않은 반 입력
+    }
+    // 시간표 가져오기
+    if (getNEISTimeTable(grade, class) != 0) {
+        fprintf(stderr, "시간표 가져오기 실패\n");
+        return -1; // 시간표 가져오기 실패
+    }
     return 0;
 }
