@@ -22,10 +22,23 @@
 		7F0C92302E02BA7E001E42DD /* TImeTable */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TImeTable; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7F0DF2C52E03A44A002E36DE /* Exceptions for "TimeTable" folder in "TImeTable" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			additionalCompilerFlagsByRelativePath = {
+				main.c = "-lcurl";
+			};
+			target = 7F0C922F2E02BA7E001E42DD /* TImeTable */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		7F0C92322E02BA7E001E42DD /* TImeTable */ = {
+		7F0C92322E02BA7E001E42DD /* TimeTable */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = TImeTable;
+			exceptions = (
+				7F0DF2C52E03A44A002E36DE /* Exceptions for "TimeTable" folder in "TImeTable" target */,
+			);
+			path = TimeTable;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -44,7 +57,7 @@
 		7F0C92272E02BA7E001E42DD = {
 			isa = PBXGroup;
 			children = (
-				7F0C92322E02BA7E001E42DD /* TImeTable */,
+				7F0C92322E02BA7E001E42DD /* TimeTable */,
 				7F0C92312E02BA7E001E42DD /* Products */,
 			);
 			sourceTree = "<group>";
@@ -73,7 +86,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				7F0C92322E02BA7E001E42DD /* TImeTable */,
+				7F0C92322E02BA7E001E42DD /* TimeTable */,
 			);
 			name = TImeTable;
 			packageProductDependencies = (
