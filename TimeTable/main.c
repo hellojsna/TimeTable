@@ -2,7 +2,8 @@
 //  main.c
 //  TimeTable
 //
-//  Created by Js Na on 6/18/25.
+//  Created by Js Na on 2025/06/17.
+//  Copyright © 2025 Js Na, All rights reserved.
 //
 
 #include <stdio.h>
@@ -24,7 +25,7 @@
 #define RECV_BUFFER_SIZE 8192 // 서버 응답을 받을 버퍼 크기
 // 학교 정보 구조체 정의
 typedef struct {
-    char edu_code[16];    // 교육청 코드 (ATPT_OFCDC_SC_CODE)
+    char edu_code[16]; // 교육청 코드 (ATPT_OFCDC_SC_CODE)
     char school_code[32]; // 학교 코드 (SD_SCHUL_CODE)
     char school_name[128]; // 학교 이름 (SCHUL_NM)
     char address[256]; // 학교 주소
@@ -33,7 +34,7 @@ typedef struct {
 #define MAX_SEARCH_RESULTS 100 // 최대 학교 검색 결과 수
 
 // 전역 변수 선언 (프로그램 전체에서 접근 가능)
-char g_selected_edu_code[16] = "";    // 선택된 교육청 코드
+char g_selected_edu_code[16] = ""; // 선택된 교육청 코드
 char g_selected_school_code[32] = ""; // 선택된 학교 코드
 char g_selected_school_name[128] = ""; // 선택된 학교 이름
 
@@ -46,8 +47,8 @@ void trim_whitespace(char *str) {
     // 앞쪽 공백 제거
     char *start = str;
     while (*start && (isspace((unsigned char)*start) || (unsigned char)*start == 0xEF || (unsigned char)*start == 0xBB || (unsigned char)*start == 0xBF)) {
-        // isspace()로 공백문자 제거
-        start++;
+        // isspace()로 공백 제거
+        start += 1;
     }
     
     // 뒤쪽 공백 제거
@@ -76,14 +77,14 @@ char* getURL(char *hostname, char *path, int port) {
     // 소켓 생성
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        perror("ERROR opening socket");
+        perror("ERROR: 소켓 생성 실패");
         return NULL;
     }
     
     // DNS Lookup
     server = gethostbyname(hostname);
     if (server == NULL) {
-        fprintf(stderr, "ERROR, no such host: %s\n", hostname);
+        fprintf(stderr, "ERROR: %s 호스트 찾기 실패\n", hostname);
         close(sockfd);
         return NULL;
     }
@@ -98,7 +99,7 @@ char* getURL(char *hostname, char *path, int port) {
     
     // 연결
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-        perror("ERROR connecting");
+        perror("ERROR: 연결 실패");
         close(sockfd);
         return NULL;
     }
@@ -107,15 +108,15 @@ char* getURL(char *hostname, char *path, int port) {
     sprintf(request_buffer,
             "GET %s HTTP/1.1\r\n"
             "Host: %s\r\n"
-            "User-Agent: %s\r\n" // User-Agent 헤더 추가
+            "User-Agent: %s\r\n" // User-Agent 추가
             "Connection: close\r\n" // 응답 후 연결 닫기 요청
-            "\r\n", // 헤더 종료 (빈 줄)
+            "\r\n", // 대가리 끝 (빈 줄)
             path, hostname, user_agent_string);
     
-    printf("Sending request:\n%s", request_buffer);
+    printf("요청 전송\n%s", request_buffer);
     
     if (send(sockfd, request_buffer, strlen(request_buffer), 0) < 0) {
-        perror("ERROR writing to socket");
+        perror("소켓 오류");
         close(sockfd);
         return NULL;
     }
@@ -141,7 +142,7 @@ char* getURL(char *hostname, char *path, int port) {
                 // 응답 본문 저장 공간 초기 할당
                 response_body = (char *)malloc(body_chunk_size + 1);
                 if (response_body == NULL) {
-                    perror("ERROR malloc failed");
+                    perror("ERROR: malloc 실패");
                     close(sockfd);
                     return NULL;
                 }
@@ -156,7 +157,7 @@ char* getURL(char *hostname, char *path, int port) {
             // 이미 헤더가 처리된 경우, 모든 데이터 본문으로 간주
             response_body = (char *)realloc(response_body, total_received_size + bytes_received + 1);
             if (response_body == NULL) {
-                perror("ERROR realloc failed");
+                perror("ERROR: realloc 실패");
                 close(sockfd);
                 return NULL;
             }
@@ -167,7 +168,7 @@ char* getURL(char *hostname, char *path, int port) {
     }
     
     if (bytes_received < 0) {
-        perror("ERROR reading from socket");
+        perror("ERROR: 소켓 읽기 실패");
         if (response_body) free(response_body); // 에러 발생 시 할당된 메모리 해제
         close(sockfd);
         return NULL;
@@ -222,7 +223,7 @@ int searchNEISSchool(char *schoolName) {
     
     // 'schoolInfo' 배열에서 'row' 배열 찾기
     JSON_Array *row_array = NULL;
-    for (size_t i = 0; i < json_array_get_count(school_info_array); ++i) {
+    for (size_t i = 0; i < json_array_get_count(school_info_array); i += 1) {
         JSON_Object *current_obj_in_school_info = json_array_get_object(school_info_array, i);
         if (current_obj_in_school_info != NULL) {
             row_array = json_object_get_array(current_obj_in_school_info, "row");
@@ -233,7 +234,7 @@ int searchNEISSchool(char *schoolName) {
     }
     
     if (row_array == NULL) {
-        fprintf(stderr, "ERROR: 'schoolInfo'에서 'row' 찾기 실패.\n");
+        fprintf(stderr, "ERROR: 'schoolInfo'에서 'row' 찾기 실패\n");
         json_value_free(root_value);
         free(json_response);
         return -1;
@@ -241,7 +242,7 @@ int searchNEISSchool(char *schoolName) {
     
     // "row" 배열 반복해서 각 학교 정보 추출
     size_t i;
-    for (i = 0; i < json_array_get_count(row_array) && num_schools < MAX_SEARCH_RESULTS; ++i) {
+    for (i = 0; i < json_array_get_count(row_array) && num_schools < MAX_SEARCH_RESULTS; i += 1) {
         JSON_Object *school_item = json_array_get_object(row_array, i);
         if (school_item == NULL) continue;
         
@@ -275,7 +276,7 @@ int searchNEISSchool(char *schoolName) {
                 strncat(schools[num_schools].address, address_detail_str, sizeof(schools[num_schools].address) - strlen(schools[num_schools].address) - 1);
                 schools[num_schools].address[sizeof(schools[num_schools].address) - 1] = '\0';
             }
-            num_schools++;
+            num_schools += 1;
         }
     }
     
@@ -289,7 +290,7 @@ int searchNEISSchool(char *schoolName) {
     
     // 사용자에게 학교 선택 요청
     printf("\n--- '%s' 검색 결과 ---\n", schoolName);
-    for (int j = 0; j < num_schools; ++j) {
+    for (int j = 0; j < num_schools; j += 1) {
         printf("%d. %s (교육청: %s, 코드: %s)\n", j + 1,
                schools[j].school_name, schools[j].edu_code, schools[j].school_code);
         printf("   주소: %s\n", schools[j].address); // 주소 출력
@@ -360,7 +361,7 @@ int parseCSVHeader(const char *csvString, const char *searchHeader) {
                 return index;
             }
             token = strtok(NULL, ",");
-            index++;
+            index += 1;
         }
         
         printf("'%s' 헤더를 찾을 수 없습니다.\n", searchHeader);
@@ -404,9 +405,6 @@ int get_weekday(const char* date_str) {
     return -1; // 주말 또는 오류
 }
 
-// 셀의 목표 너비 (화면상 차지하는 칸 수)
-#define TARGET_CELL_WIDTH 15
-
 // 문자열의 실제 화면 너비를 계산하는 함수
 int get_str_width(const char *s) {
     wchar_t wstr[1024];
@@ -418,15 +416,24 @@ int get_str_width(const char *s) {
 }
 
 // 문자열을 출력하고 너비에 맞게 공백을 추가하는 함수
-void print_padded_cell(const char *subject) {
+void print_padded_cell(const char *subject, int target_width, int is_today) {
     int width = get_str_width(subject);
     // 목표 너비에서 실제 너비를 뺀 만큼 공백 추가
-    int padding = TARGET_CELL_WIDTH - width;
+    int padding = target_width - width;
     if (padding < 0) padding = 0; // 너비를 초과하면 공백 없음
 
-    printf(" %s", subject);
-    for (int i = 0; i < padding; i++) {
+    if (is_today == 1) {
+        printf("#");
+    } else {
         printf(" ");
+    }
+        
+    printf("%s", subject);
+    for (int i = 0; i < padding; i += 1) {
+        printf(" ");
+    }
+    if (is_today == 1) {
+        printf("#");
     }
     printf("|");
 }
@@ -442,10 +449,10 @@ void remove_spaces_inplace(char *str) {
         // 현재 reader 문자가 공백이 아니라면
         if (*reader != ' ') {
             *writer = *reader; // writer 위치에 해당 문자를 복사
-            writer++;          // writer 위치를 다음 칸으로 이동
+            writer += 1;          // writer 위치를 다음 칸으로 이동
         }
-        // reader는 공백이든 아니든 항상 다음 문자로 이동
-        reader++;
+        // reader 항상 다음 문자로 이동
+        reader += 1;
     }
     *writer = '\0';
 }
@@ -523,7 +530,7 @@ int getNEISTimeTable(int grade, int class) {
             } else if (col_index == subjectCol) {
                 subject_str = token;
             }
-            col_index++;
+            col_index += 1;
         }
 
         // 날짜, 교시, 수업 내용이 모두 정상적으로 추출되었는지 확인
@@ -540,12 +547,45 @@ int getNEISTimeTable(int grade, int class) {
     // 채워진 timetable 배열을 형식에 맞게 출력
     printf("%d학년 %d반 시간표(%s ~ %s)\n", grade, class, start_date, end_date);
     printf("---------------------------------------------------------------------\n");
-    for (int period = 1; period <= 7; period++) {
-        printf("|  %d교시 |", period);
-        for (int day = 0; day < 5; day++) {
+    int max_width = 0;
+    
+    for (int day = 0; day < 5; day += 1) {
+        for (int period = 0; period < 7; period += 1) {
+            const char* subject = timetable[day][period] ? timetable[day][period] : "";
+            int width = get_str_width(subject);
+            if (width > max_width) {
+                max_width = width; // 가장 긴 수업 내용의 너비를 저장
+            }
+        }
+    }
+    int heading_indent = get_str_width("|0교시|"); // "교시"의 너비 계산
+    for (int i = 0; i < heading_indent; i += 1) {
+        printf(" "); // 교시 제목 앞에 공백 추가
+    }
+    const char* date[5] = {"월요일", "화요일", "수요일", "목요일", "금요일"};
+    int today = get_weekday(start_date); // 오늘 날짜의 요일 인덱스
+    for (int day = 0; day < 5; day += 1) { // 요일 제목 출력
+        if (day == today) {
+            char print_date[50] = "";
+            strcpy(print_date, date[day]);
+            strcat(print_date, "(오늘)"); // 오늘 날짜 표시
+            print_padded_cell(&print_date, max_width, 1); // 오늘이면 # 추가
+        } else {
+            print_padded_cell(date[day], max_width, 0); // 오늘이 아니면 그냥 출력
+        }
+    }
+    
+    printf("\n---------------------------------------------------------------------\n");
+    for (int period = 1; period <= 7; period += 1) {
+        printf("|%d교시|", period);
+        for (int day = 0; day < 5; day += 1) {
             const char* subject = timetable[day][period - 1] ? timetable[day][period - 1] : "";
-            // 너비를 맞춰 출력하는 함수 호출
-            print_padded_cell(subject);
+            if (day == today) {
+                // 오늘이면 과목 앞에 # 추가
+                print_padded_cell(subject, max_width, 1);
+            } else {
+                print_padded_cell(subject, max_width, 0);
+            }
         }
         printf("\n");
     }
