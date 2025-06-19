@@ -9,7 +9,7 @@
 #include <string.h>
 
 #include <stdlib.h>
-#include <unistd.h> // close
+#include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h> // gethostbyname
@@ -43,21 +43,21 @@ char g_selected_school_name[128] = ""; // 선택된 학교 이름
 void trim_whitespace(char *str) {
     if (str == NULL) return;
     
-    // Trim leading whitespace
+    // 앞쪽 공백 제거
     char *start = str;
     while (*start && (isspace((unsigned char)*start) || (unsigned char)*start == 0xEF || (unsigned char)*start == 0xBB || (unsigned char)*start == 0xBF)) {
-        // isspace()로 공백문자 제거, 0xEF, 0xBB, 0xBF는 UTF-8 BOM
+        // isspace()로 공백문자 제거
         start++;
     }
     
-    // Trim trailing whitespace
+    // 뒤쪽 공백 제거
     char *end = str + strlen(str) - 1;
     while (end >= start && (isspace((unsigned char)*end) || (unsigned char)*end == 0xEF || (unsigned char)*end == 0xBB || (unsigned char)*end == 0xBF)) {
         end--;
     }
-    *(end + 1) = '\0'; // Null-terminate the string
+    *(end + 1) = '\0';
     
-    // Shift the string if leading whitespace was trimmed
+    // 문자열이 변경되었으면 시작 위치로 이동
     if (start != str) {
         memmove(str, start, strlen(start) + 1);
     }
@@ -67,20 +67,20 @@ char* getURL(char *hostname, char *path, int port) {
     int sockfd;
     struct sockaddr_in serv_addr;
     struct hostent *server;
-    char request_buffer[RECV_BUFFER_SIZE * 2]; // 요청 버퍼는 응답 버퍼보다 크게 잡을 수 있음
+    char request_buffer[RECV_BUFFER_SIZE * 2];
     char temp_response_buffer[RECV_BUFFER_SIZE];
     char *response_body = NULL;
     size_t total_received_size = 0;
-    const char *user_agent_string = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"; // 사용자 에이전트 문자열
+    const char *user_agent_string = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"; // UserAgent 설정(macOS Chrome 기준)
     
-    // 1. 소켓 생성
+    // 소켓 생성
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
         perror("ERROR opening socket");
         return NULL;
     }
     
-    // 2. 호스트 이름 해결 (DNS 룩업)
+    // DNS Lookup
     server = gethostbyname(hostname);
     if (server == NULL) {
         fprintf(stderr, "ERROR, no such host: %s\n", hostname);
@@ -88,7 +88,7 @@ char* getURL(char *hostname, char *path, int port) {
         return NULL;
     }
     
-    // 3. 서버 주소 설정
+    // 요청 보낼 서버 주소 설정
     bzero((char *)&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     bcopy((char *)server->h_addr,
@@ -96,15 +96,14 @@ char* getURL(char *hostname, char *path, int port) {
           server->h_length);
     serv_addr.sin_port = htons(port); // 호스트 바이트 순서를 네트워크 바이트 순서로 변환
     
-    // 4. 서버 연결
+    // 연결
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
         perror("ERROR connecting");
         close(sockfd);
         return NULL;
     }
     
-    // 5. HTTP GET 요청 문자열 구성 및 전송
-    // User-Agent 헤더 포함
+    // 대가리 설정
     sprintf(request_buffer,
             "GET %s HTTP/1.1\r\n"
             "Host: %s\r\n"
@@ -121,13 +120,12 @@ char* getURL(char *hostname, char *path, int port) {
         return NULL;
     }
     
-    // 6. 서버 응답 수신 및 본문 추출
     int bytes_received;
     char *header_end = NULL;
     int header_processed = 0;
     
     while ((bytes_received = recv(sockfd, temp_response_buffer, RECV_BUFFER_SIZE - 1, 0)) > 0) {
-        temp_response_buffer[bytes_received] = '\0'; // 널 종료
+        temp_response_buffer[bytes_received] = '\0';
         
         if (!header_processed) {
             // 헤더와 본문 구분자 "\r\n\r\n" 찾기
@@ -152,14 +150,10 @@ char* getURL(char *hostname, char *path, int port) {
                 total_received_size = body_chunk_size;
                 header_processed = 1;
             } else {
-                // 아직 헤더 끝을 찾지 못했거나, 헤더만 있는 경우
-                // 다음 recv에서 나머지 부분을 받을 수 있음. 현재는 아무것도 저장 안함.
-                // NOTE: 실제로는 헤더가 RECV_BUFFER_SIZE보다 클 수도 있으므로,
-                // 이를 처리하려면 더 복잡한 로직(버퍼 재할당, 헤더 누적)이 필요합니다.
-                // 이 예시에서는 간단화를 위해 첫 청크에 헤더 끝이 있다고 가정합니다.
+                // TODO: 헤더 끝을 찾지 못한 경우 처리
             }
         } else {
-            // 헤더가 이미 처리되었으므로, 모든 수신 데이터는 본문으로 간주
+            // 이미 헤더가 처리된 경우, 모든 데이터 본문으로 간주
             response_body = (char *)realloc(response_body, total_received_size + bytes_received + 1);
             if (response_body == NULL) {
                 perror("ERROR realloc failed");
@@ -187,9 +181,7 @@ char* getURL(char *hostname, char *path, int port) {
 
 int searchNEISSchool(char *schoolName) {
     char full_path[256];
-    // strcat은 첫 번째 인자(대상)에 두 번째 인자(원본)를 이어붙이고 첫 번째 인자를 반환합니다.
-    // 따라서 안전하게 사용하려면 충분한 버퍼를 먼저 만들고 sprintf 등을 사용해야 합니다.
-    // 여기서는 동적 프록시 경로와 쿼리 파라미터를 조합합니다.
+    
     sprintf(full_path, "/https://hello.jsna.dev/lunch/api/search-hakgyo.php?sc=%s", schoolName);
     
     char* json_response = getURL("cors-proxy.jsna.workers.dev", full_path, 80);
@@ -228,16 +220,14 @@ int searchNEISSchool(char *schoolName) {
         return -1;
     }
     
-    // "schoolInfo" 배열 내에서 'row' 배열을 포함하는 객체를 찾습니다.
-    // 이 예시에서는 'head'와 'row'가 각각의 객체로 배열 내에 존재하므로,
-    // 배열을 순회하며 "row" 키를 가진 객체를 찾아야 합니다.
+    // 'schoolInfo' 배열에서 'row' 배열 찾기
     JSON_Array *row_array = NULL;
     for (size_t i = 0; i < json_array_get_count(school_info_array); ++i) {
         JSON_Object *current_obj_in_school_info = json_array_get_object(school_info_array, i);
         if (current_obj_in_school_info != NULL) {
             row_array = json_object_get_array(current_obj_in_school_info, "row");
             if (row_array != NULL) {
-                break; // 'row' 배열을 찾았으므로 루프 종료
+                break; // 'row' 배열을 찾아서 루프 종료
             }
         }
     }
@@ -249,7 +239,7 @@ int searchNEISSchool(char *schoolName) {
         return -1;
     }
     
-    // "row" 배열 순회하며 각 학교 정보 추출
+    // "row" 배열 반복해서 각 학교 정보 추출
     size_t i;
     for (i = 0; i < json_array_get_count(row_array) && num_schools < MAX_SEARCH_RESULTS; ++i) {
         JSON_Object *school_item = json_array_get_object(row_array, i);
@@ -310,8 +300,8 @@ int searchNEISSchool(char *schoolName) {
     printf("학교를 선택해 주세요. (1-%d 번호 입력): ", num_schools);
     if (scanf("%d", &choice) != 1 || choice < 1 || choice > num_schools) {
         printf("올바르지 않은 선택입니다.\n");
-        // 유효하지 않은 선택이므로 전역 변수에 저장하지 않고 실패 반환
-        // TODO: 재시도 로직 추가 가능
+        // 잘못된 입력
+        // TODO: 재시도 기능 추가
         return -1;
     }
     
@@ -340,18 +330,18 @@ int parseCSVHeader(const char *csvString, const char *searchHeader) {
         return -1;
     }
     
-    // strtok은 원본 문자열을 변경하므로 복사본을 생성합니다.
+    // 복사본을 만들어 사용
     char *csvCopy = strdup(csvString);
     if (csvCopy == NULL) {
         printf("메모리 할당에 실패했습니다.\n");
         return -1;
     }
     
-    // 첫 번째 줄(헤더)만 추출합니다.
+    // 헤더만 추출
     char *header = strtok(csvCopy, "\n\r"); // \r (캐리지 리턴)도 처리
     
     if (header != NULL) {
-        // BOM(Byte Order Mark) 제거 (UTF-8 with BOM)
+        // BOM(Byte Order Mark) 제거
         if ((unsigned char)header[0] == 0xEF &&
             (unsigned char)header[1] == 0xBB &&
             (unsigned char)header[2] == 0xBF) {
@@ -365,9 +355,6 @@ int parseCSVHeader(const char *csvString, const char *searchHeader) {
         token = strtok(header, ",");
         
         while (token != NULL) {
-            // 양 끝의 공백을 제거하는 로직이 필요하다면 여기에 추가할 수 있습니다.
-            // 예: trim(token);
-            
             if (strcmp(token, searchHeader) == 0) {
                 free(csvCopy); // 함수 종료 전 메모리 해제
                 return index;
@@ -377,11 +364,11 @@ int parseCSVHeader(const char *csvString, const char *searchHeader) {
         }
         
         printf("'%s' 헤더를 찾을 수 없습니다.\n", searchHeader);
-        free(csvCopy); // 함수 종료 전 메모리 해제
+        free(csvCopy);
         return -1;
     } else {
         printf("CSV 문자열에서 헤더를 추출할 수 없습니다.\n");
-        free(csvCopy); // 함수 종료 전 메모리 해제
+        free(csvCopy);
         return -1;
     }
 }
@@ -416,8 +403,9 @@ int get_weekday(const char* date_str) {
     
     return -1; // 주말 또는 오류
 }
+
 // 셀의 목표 너비 (화면상 차지하는 칸 수)
-#define TARGET_CELL_WIDTH 16
+#define TARGET_CELL_WIDTH 15
 
 // 문자열의 실제 화면 너비를 계산하는 함수
 int get_str_width(const char *s) {
@@ -451,7 +439,7 @@ void remove_spaces_inplace(char *str) {
 
     // 문자열의 끝에 도달할 때까지 반복
     while (*reader != '\0') {
-        // 현재 reader가 가리키는 문자가 공백이 '아니라면'
+        // 현재 reader 문자가 공백이 아니라면
         if (*reader != ' ') {
             *writer = *reader; // writer 위치에 해당 문자를 복사
             writer++;          // writer 위치를 다음 칸으로 이동
@@ -459,8 +447,6 @@ void remove_spaces_inplace(char *str) {
         // reader는 공백이든 아니든 항상 다음 문자로 이동
         reader++;
     }
-    // 모든 작업이 끝난 후, writer가 가리키는 위치에 널 종료 문자를 추가하여
-    // 새로운 문자열의 끝을 지정합니다.
     *writer = '\0';
 }
 
@@ -477,19 +463,18 @@ int getNEISTimeTable(int grade, int class) {
     // 오늘의 날짜
     strftime(start_date, sizeof(start_date), "%Y%m%d", tm_info);
     
-    // 일주일 후의 날짜 (간단하게 계산, 월말/연말 처리 필요 시 복잡해짐)
+    // 일주일 후의 날짜
     // 여기서는 단순히 오늘부터 6일 후로 계산
-    // 더 정확한 계산을 위해서는 mktime과 struct tm 조작이 필요
+    
     tm_info->tm_mday += 6;
     mktime(tm_info); // mktime으로 tm_info를 정규화하여 월, 일 등을 업데이트
     strftime(end_date, sizeof(end_date), "%Y%m%d", tm_info);
     
     
-    // sprintf를 사용하여 URL 경로를 만듭니다.
-    // 날짜 매개변수 추가 (fy: from_ymd, ty: to_ymd)
+    // 날짜 매개변수 추가해서 요청 보내기 (fy: from_ymd, ty: to_ymd)
+    // 서버에서 NEIS API 응답(JSON) -> CSV 변환
     sprintf(full_path, "/https://hello.jsna.dev/timetable/get-timetable.php?oc=%s&sc=%s&gd=%d&cl=%d&fy=%s&ty=%s",
             g_selected_edu_code, g_selected_school_code, grade, class, start_date, end_date);
-    //response is csv
     
     char* csv_response = getURL("cors-proxy.jsna.workers.dev", full_path, 80);
     if (csv_response == NULL) {
@@ -507,7 +492,7 @@ int getNEISTimeTable(int grade, int class) {
     // timetable[요일인덱스][교시인덱스]
     char *timetable[5][7] = {0}; // 포인터 배열을 NULL로 초기화
 
-    // strtok_r 함수는 원본 문자열을 수정하므로, 복사본을 만들어 사용합니다.
+    // 복사본을 만들어 사용
     char csv_data[strlen(csv_response) + 1];
     strcpy(csv_data, csv_response);
     
@@ -516,10 +501,10 @@ int getNEISTimeTable(int grade, int class) {
     int subjectCol = parseCSVHeader(csv_response, "ITRT_CNTNT"); // 수업내용
     
     char *line_saveptr;
-    // 첫 번째 줄(헤더)은 건너뜁니다.
+    // 헤더 건너뛰기
     char *current_line = strtok_r(csv_data, "\n", &line_saveptr);
 
-    // 각 행을 반복하며 시간표를 채웁니다.
+    // 각 행 반복해서 시간표 채우기
     while ((current_line = strtok_r(NULL, "\n", &line_saveptr)) != NULL) {
         char *token_saveptr;
         char *token;
@@ -529,7 +514,7 @@ int getNEISTimeTable(int grade, int class) {
         char *period_str = NULL;
         char *subject_str = NULL;
 
-        // 현재 행을 ',' 기준으로 파싱하여 각 열의 데이터를 추출합니다.
+        // 현재 행 ',' 기준으로 파싱해서 각 열의 데이터 추출
         for (token = strtok_r(current_line, ",", &token_saveptr); token != NULL; token = strtok_r(NULL, ",", &token_saveptr)) {
             if (col_index == dateCol) {
                 date_str = token;
@@ -541,30 +526,25 @@ int getNEISTimeTable(int grade, int class) {
             col_index++;
         }
 
-        // 날짜, 교시, 수업 내용이 모두 정상적으로 추출되었는지 확인합니다.
+        // 날짜, 교시, 수업 내용이 모두 정상적으로 추출되었는지 확인
         if (date_str && period_str && subject_str) {
             remove_spaces_inplace(subject_str); // 수업 내용에서 공백 제거(공백 있으면 옆으로 너무 넓어짐)
-            // 날짜 문자열로부터 요일 인덱스(월=0 ~ 금=4)를 가져옵니다.
-            int day_index = get_weekday(date_str);
-            // 교시 문자열을 정수로 변환합니다.
+            int day_index = get_weekday(date_str); // 날짜에서 요일 인덱스 가져오기
             int period_num = atoi(period_str);
-
-            // 유효한 요일(월~금)이고 유효한 교시(1~7)인 경우에만 시간표 배열에 저장합니다.
-            if (day_index != -1 && period_num >= 1 && period_num <= 7) {
-                // 교시는 1부터 시작하므로 배열 인덱스는 period_num - 1 입니다.
+            if (day_index != -1 && period_num >= 1 && period_num <= 7) { // 유효한 요일과 교시인지 확인
                 timetable[day_index][period_num - 1] = subject_str;
             }
         }
     }
 
-    // 채워진 timetable 배열을 형식에 맞게 출력합니다.
+    // 채워진 timetable 배열을 형식에 맞게 출력
     printf("%d학년 %d반 시간표(%s ~ %s)\n", grade, class, start_date, end_date);
     printf("---------------------------------------------------------------------\n");
     for (int period = 1; period <= 7; period++) {
         printf("|  %d교시 |", period);
         for (int day = 0; day < 5; day++) {
             const char* subject = timetable[day][period - 1] ? timetable[day][period - 1] : "";
-            // 너비를 맞춰 출력하는 헬퍼 함수 호출
+            // 너비를 맞춰 출력하는 함수 호출
             print_padded_cell(subject);
         }
         printf("\n");
@@ -578,12 +558,10 @@ int getNEISTimeTable(int grade, int class) {
 
 int updateSavedSchool(void) {
     FILE *file = fopen("TimeTable_school.csv", "r");
-    char school_name_input[100];
+    char school_name_input[100] = "";
     printf("학교 이름을 입력하세요: ");
-    if (fgets(school_name_input, sizeof(school_name_input), stdin) == NULL) {
-        fprintf(stderr, "입력 인식 실패\n");
-        return -1;
-    }
+    scanf(" %[^\n]", school_name_input); // 공백 포함 입력 받기
+    // 개행 문자 제거
     school_name_input[strcspn(school_name_input, "\n")] = '\0'; // 개행 문자 제거
     
     if (searchNEISSchool(school_name_input) != -1) {
@@ -661,6 +639,25 @@ int main(int argc, const char * argv[]) {
     if (getNEISTimeTable(grade, class) != 0) {
         fprintf(stderr, "시간표 가져오기 실패\n");
         return -1; // 시간표 가져오기 실패
+    }
+    printf("Enter 키를 눌러 종료합니다.\n");
+    printf("학교를 변경하려면 1, 다시 시작하려면 2를 입력하세요.\n");
+    int choice;
+    if (scanf("%d", &choice) != 1 || (choice != 1 && choice != 2)) {
+        fprintf(stderr, "올바르지 않은 선택입니다.\n");
+        return -1; // 유효하지 않은 선택
+    }
+    if (choice == 1) {
+        // 학교 정보 업데이트
+        if (updateSavedSchool() != 0) {
+            fprintf(stderr, "학교 정보 업데이트 실패\n");
+            return -1; // 학교 정보 업데이트 실패
+        }
+        return main(argc, argv); // 재귀
+    } else if (choice == 2) {
+        // 프로그램 다시 시작
+        printf("프로그램을 다시 시작합니다.\n");
+        return main(argc, argv); // 재귀
     }
     return 0;
 }
