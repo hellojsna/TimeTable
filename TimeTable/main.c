@@ -126,6 +126,7 @@ char* getURL(char *hostname, char *path, int port) {
     int header_processed = 0;
     
     while ((bytes_received = recv(sockfd, temp_response_buffer, RECV_BUFFER_SIZE - 1, 0)) > 0) {
+        // FIXME: Implicit conversion loses integer precision: 'ssize_t' (aka 'long') to 'int'
         temp_response_buffer[bytes_received] = '\0';
         
         if (!header_processed) {
@@ -409,7 +410,7 @@ int get_weekday(const char* date_str) {
 int get_str_width(const char *s) {
     wchar_t wstr[1024];
     // 멀티바이트 문자열(UTF-8)을 와이드 캐릭터 문자열로 변환
-    int len = mbstowcs(wstr, s, 1024);
+    int len = mbstowcs(wstr, s, 1024); // FIXME: Implicit conversion loses integer precision: 'size_t' (aka 'unsigned long') to 'int'
     if (len < 0) return strlen(s); // 변환 실패 시 바이트 길이 반환
     // 와이드 캐릭터 문자열의 화면 너비 계산
     return wcswidth(wstr, len);
@@ -570,6 +571,7 @@ int getNEISTimeTable(int grade, int class) {
             strcpy(print_date, date[day]);
             strcat(print_date, "(오늘)"); // 오늘 날짜 표시
             print_padded_cell(&print_date, max_width, 1); // 오늘이면 # 추가
+            // FIXME: Incompatible pointer types passing 'char (*)[50]' to parameter of type 'const char *'
         } else {
             print_padded_cell(date[day], max_width, 0); // 오늘이 아니면 그냥 출력
         }
