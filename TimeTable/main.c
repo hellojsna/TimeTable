@@ -22,7 +22,7 @@
 #include "parson.h" // JSON 파싱 라이브러리
 
 
-#define RECV_BUFFER_SIZE 8192 // 서버 응답을 받을 버퍼 크기
+#define RECV_BUFFER_SIZE 16384 // 서버 응답을 받을 버퍼 크기
 // 학교 정보 구조체 정의
 typedef struct {
     char edu_code[16]; // 교육청 코드 (ATPT_OFCDC_SC_CODE)
@@ -177,7 +177,6 @@ char* getURL(char *hostname, char *path, int port) {
     
     // 7. 소켓 닫기
     close(sockfd);
-    
     return response_body;
 }
 
