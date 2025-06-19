@@ -15,6 +15,8 @@
 #include <netdb.h> // gethostbyname
 #include <time.h>
 #include <ctype.h>
+#include <locale.h>
+#include <wchar.h>
 
 #include "parson.h" // JSON 파싱 라이브러리
 
@@ -384,8 +386,65 @@ int parseCSVHeader(const char *csvString, const char *searchHeader) {
     }
 }
 
+int get_weekday(const char* date_str) {
+    if (strlen(date_str) != 8) {
+        return -1; // 잘못된 형식
+    }
+    char year_s[5], month_s[3], day_s[3];
+    strncpy(year_s, date_str, 4);
+    year_s[4] = '\0';
+    strncpy(month_s, date_str + 4, 2);
+    month_s[2] = '\0';
+    strncpy(day_s, date_str + 6, 2);
+    day_s[2] = '\0';
+
+    struct tm time_info = {0};
+    time_info.tm_year = atoi(year_s) - 1900;
+    time_info.tm_mon = atoi(month_s) - 1;
+    time_info.tm_mday = atoi(day_s);
+    
+    // mktime을 호출하여 tm_wday (요일) 필드를 계산
+    // tm_wday: 0=일요일, 1=월요일, ..., 6=토요일
+    if (mktime(&time_info) == -1) {
+        return -1; // 잘못된 날짜
+    }
+
+    int weekday = time_info.tm_wday;
+    if (weekday >= 1 && weekday <= 5) { // 월요일(1) ~ 금요일(5)
+        return weekday - 1; // 0 ~ 4 범위로 변환
+    }
+    
+    return -1; // 주말 또는 오류
+}
+// 셀의 목표 너비 (화면상 차지하는 칸 수)
+#define TARGET_CELL_WIDTH 16
+
+// 문자열의 실제 화면 너비를 계산하는 함수
+int get_str_width(const char *s) {
+    wchar_t wstr[1024];
+    // 멀티바이트 문자열(UTF-8)을 와이드 캐릭터 문자열로 변환
+    int len = mbstowcs(wstr, s, 1024);
+    if (len < 0) return strlen(s); // 변환 실패 시 바이트 길이 반환
+    // 와이드 캐릭터 문자열의 화면 너비 계산
+    return wcswidth(wstr, len);
+}
+
+// 문자열을 출력하고 너비에 맞게 공백을 추가하는 함수
+void print_padded_cell(const char *subject) {
+    int width = get_str_width(subject);
+    // 목표 너비에서 실제 너비를 뺀 만큼 공백 추가
+    int padding = TARGET_CELL_WIDTH - width;
+    if (padding < 0) padding = 0; // 너비를 초과하면 공백 없음
+
+    printf(" %s", subject);
+    for (int i = 0; i < padding; i++) {
+        printf(" ");
+    }
+    printf("|");
+}
 
 int getNEISTimeTable(int grade, int class) {
+    setlocale(LC_ALL, "");
     char full_path[256] = "";
     
     // 현재 날짜를 가져와 YYYYMMDD 형식으로 포맷팅
@@ -416,34 +475,78 @@ int getNEISTimeTable(int grade, int class) {
         fprintf(stderr, "잘못된 HTTP 응답\n");
         return -1; // 시간표 가져오기 실패
     }
-    
+    printf("시간표 데이터 분석 중...\n");
+
     // 앞에 있는 43fe\r\n 같은 데이터 제거: 첫번째 \r\n 찾아서 그 앞에 다 날리기
     char *start_ptr = strstr(csv_response, "\r\n");
     if (start_ptr != NULL) {
         // 첫 번째 중괄호 위치를 찾았으므로 그 앞의 데이터를 제거
         csv_response = start_ptr;
     }
+    // timetable[요일인덱스][교시인덱스]
+    char *timetable[5][7] = {0}; // 포인터 배열을 NULL로 초기화
 
+    // strtok_r 함수는 원본 문자열을 수정하므로, 복사본을 만들어 사용합니다.
+    char csv_data[strlen(csv_response) + 1];
+    strcpy(csv_data, csv_response);
+    
     int dateCol = parseCSVHeader(csv_response, "ALL_TI_YMD"); // 시간표일자
     int timeCol = parseCSVHeader(csv_response, "PERIO"); // 교시
     int subjectCol = parseCSVHeader(csv_response, "ITRT_CNTNT"); // 수업내용
     
-    char line[1024] = {0}; // CSV 파일의 각 행을 저장할 버퍼
-    // 각 행에는 날짜, 교시, 수업내용이 포함되어 있음.
-    // 이것을 기반으로 정렬 후 테이블 형식으로 출력 (월~금)
-    printf("\n\n--- 시간표 ---\n");
-    printf("학년: %d, 반: %d\n", grade, class);
-    printf("날짜: %s ~ %s\n", start_date, end_date);
-    printf("--------------------------------------------------\n");
-    printf("| 교시 | 월요일 | 화요일 | 수요일 | 목요일 | 금요일 |\n");
-    printf("--------------------------------------------------\n");
-    
-    // 5*7 배열로 교시별로 수업 내용을 저장
-    char *timetable[5][7] = {{""}}; // 5교시, 7일 (월~금)
-    char *line_ptr = csv_response;
-    // dateCol, timeCol, subjectCol은 parseCSVHeader에서 찾은 인덱스입니다.
-    // 각 행을 반복하며 시간표를 채웁니다. ss
-    
+    char *line_saveptr;
+    // 첫 번째 줄(헤더)은 건너뜁니다.
+    char *current_line = strtok_r(csv_data, "\n", &line_saveptr);
+
+    // 각 행을 반복하며 시간표를 채웁니다.
+    while ((current_line = strtok_r(NULL, "\n", &line_saveptr)) != NULL) {
+        char *token_saveptr;
+        char *token;
+        int col_index = 0;
+
+        char *date_str = NULL;
+        char *period_str = NULL;
+        char *subject_str = NULL;
+
+        // 현재 행을 ',' 기준으로 파싱하여 각 열의 데이터를 추출합니다.
+        for (token = strtok_r(current_line, ",", &token_saveptr); token != NULL; token = strtok_r(NULL, ",", &token_saveptr)) {
+            if (col_index == dateCol) {
+                date_str = token;
+            } else if (col_index == timeCol) {
+                period_str = token;
+            } else if (col_index == subjectCol) {
+                subject_str = token;
+            }
+            col_index++;
+        }
+
+        // 날짜, 교시, 수업 내용이 모두 정상적으로 추출되었는지 확인합니다.
+        if (date_str && period_str && subject_str) {
+            // 날짜 문자열로부터 요일 인덱스(월=0 ~ 금=4)를 가져옵니다.
+            int day_index = get_weekday(date_str);
+            // 교시 문자열을 정수로 변환합니다.
+            int period_num = atoi(period_str);
+
+            // 유효한 요일(월~금)이고 유효한 교시(1~7)인 경우에만 시간표 배열에 저장합니다.
+            if (day_index != -1 && period_num >= 1 && period_num <= 7) {
+                // 교시는 1부터 시작하므로 배열 인덱스는 period_num - 1 입니다.
+                timetable[day_index][period_num - 1] = subject_str;
+            }
+        }
+    }
+
+    // 채워진 timetable 배열을 형식에 맞게 출력합니다.
+    for (int period = 1; period <= 7; period++) {
+        printf("|  %d교시 |", period);
+        for (int day = 0; day < 5; day++) {
+            const char* subject = timetable[day][period - 1] ? timetable[day][period - 1] : "";
+            // 너비를 맞춰 출력하는 헬퍼 함수 호출
+            print_padded_cell(subject);
+        }
+        printf("\n");
+    }
+    printf("---------------------------------------------------------------------\n");
+
                   
     return 0;
     

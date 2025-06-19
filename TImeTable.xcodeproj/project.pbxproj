@@ -19,21 +19,21 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		7F0C92302E02BA7E001E42DD /* TImeTable */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TImeTable; sourceTree = BUILT_PRODUCTS_DIR; };
+		7F0C92302E02BA7E001E42DD /* TimeTable */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TimeTable; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		7F0DF2C52E03A44A002E36DE /* Exceptions for "TimeTable" folder in "TImeTable" target */ = {
+		7F0DF2C52E03A44A002E36DE /* Exceptions for "TimeTable" folder in "TimeTable" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			additionalCompilerFlagsByRelativePath = {
 				main.c = "-lcurl";
 			};
-			target = 7F0C922F2E02BA7E001E42DD /* TImeTable */;
+			target = 7F0C922F2E02BA7E001E42DD /* TimeTable */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		7F82ADD72E03BBBD00A9D5C0 /* Exceptions for "TimeTable" folder in "Compile Sources" phase from "TImeTable" target */ = {
+		7F82ADD72E03BBBD00A9D5C0 /* Exceptions for "TimeTable" folder in "Compile Sources" phase from "TimeTable" target */ = {
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
 			buildPhase = 7F0C922C2E02BA7E001E42DD /* Sources */;
 			membershipExceptions = (
@@ -46,8 +46,8 @@
 		7F0C92322E02BA7E001E42DD /* TimeTable */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				7F0DF2C52E03A44A002E36DE /* Exceptions for "TimeTable" folder in "TImeTable" target */,
-				7F82ADD72E03BBBD00A9D5C0 /* Exceptions for "TimeTable" folder in "Compile Sources" phase from "TImeTable" target */,
+				7F0DF2C52E03A44A002E36DE /* Exceptions for "TimeTable" folder in "TimeTable" target */,
+				7F82ADD72E03BBBD00A9D5C0 /* Exceptions for "TimeTable" folder in "Compile Sources" phase from "TimeTable" target */,
 			);
 			path = TimeTable;
 			sourceTree = "<group>";
@@ -76,7 +76,7 @@
 		7F0C92312E02BA7E001E42DD /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				7F0C92302E02BA7E001E42DD /* TImeTable */,
+				7F0C92302E02BA7E001E42DD /* TimeTable */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -84,9 +84,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		7F0C922F2E02BA7E001E42DD /* TImeTable */ = {
+		7F0C922F2E02BA7E001E42DD /* TimeTable */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 7F0C92372E02BA7E001E42DD /* Build configuration list for PBXNativeTarget "TImeTable" */;
+			buildConfigurationList = 7F0C92372E02BA7E001E42DD /* Build configuration list for PBXNativeTarget "TimeTable" */;
 			buildPhases = (
 				7F0C922C2E02BA7E001E42DD /* Sources */,
 				7F0C922D2E02BA7E001E42DD /* Frameworks */,
@@ -99,11 +99,11 @@
 			fileSystemSynchronizedGroups = (
 				7F0C92322E02BA7E001E42DD /* TimeTable */,
 			);
-			name = TImeTable;
+			name = TimeTable;
 			packageProductDependencies = (
 			);
 			productName = TImeTable;
-			productReference = 7F0C92302E02BA7E001E42DD /* TImeTable */;
+			productReference = 7F0C92302E02BA7E001E42DD /* TimeTable */;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
@@ -135,7 +135,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				7F0C922F2E02BA7E001E42DD /* TImeTable */,
+				7F0C922F2E02BA7E001E42DD /* TimeTable */,
 			);
 		};
 /* End PBXProject section */
@@ -303,7 +303,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		7F0C92372E02BA7E001E42DD /* Build configuration list for PBXNativeTarget "TImeTable" */ = {
+		7F0C92372E02BA7E001E42DD /* Build configuration list for PBXNativeTarget "TimeTable" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				7F0C92382E02BA7E001E42DD /* Debug */,
