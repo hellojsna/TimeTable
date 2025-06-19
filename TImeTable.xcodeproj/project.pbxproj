@@ -32,11 +32,22 @@
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		7F82ADD72E03BBBD00A9D5C0 /* Exceptions for "TimeTable" folder in "Compile Sources" phase from "TImeTable" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 7F0C922C2E02BA7E001E42DD /* Sources */;
+			membershipExceptions = (
+				parson.h,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		7F0C92322E02BA7E001E42DD /* TimeTable */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				7F0DF2C52E03A44A002E36DE /* Exceptions for "TimeTable" folder in "TImeTable" target */,
+				7F82ADD72E03BBBD00A9D5C0 /* Exceptions for "TimeTable" folder in "Compile Sources" phase from "TImeTable" target */,
 			);
 			path = TimeTable;
 			sourceTree = "<group>";
@@ -106,10 +117,11 @@
 				TargetAttributes = {
 					7F0C922F2E02BA7E001E42DD = {
 						CreatedOnToolsVersion = 16.0;
+						LastSwiftMigration = 1600;
 					};
 				};
 			};
-			buildConfigurationList = 7F0C922B2E02BA7E001E42DD /* Build configuration list for PBXProject "TImeTable" */;
+			buildConfigurationList = 7F0C922B2E02BA7E001E42DD /* Build configuration list for PBXProject "TimeTable" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -257,27 +269,32 @@
 		7F0C92382E02BA7E001E42DD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 2NLT9UH89L;
 				ENABLE_HARDENED_RUNTIME = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
 		7F0C92392E02BA7E001E42DD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 2NLT9UH89L;
 				ENABLE_HARDENED_RUNTIME = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		7F0C922B2E02BA7E001E42DD /* Build configuration list for PBXProject "TImeTable" */ = {
+		7F0C922B2E02BA7E001E42DD /* Build configuration list for PBXProject "TimeTable" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				7F0C92352E02BA7E001E42DD /* Debug */,
