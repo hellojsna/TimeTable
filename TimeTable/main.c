@@ -443,6 +443,27 @@ void print_padded_cell(const char *subject) {
     printf("|");
 }
 
+void remove_spaces_inplace(char *str) {
+    if (str == NULL) return; // 널 포인터가 들어온 경우 함수 종료
+
+    char *writer = str; // 공백이 아닌 문자를 써야 할 위치를 가리키는 포인터
+    char *reader = str; // 문자열을 처음부터 읽어나갈 포인터
+
+    // 문자열의 끝에 도달할 때까지 반복
+    while (*reader != '\0') {
+        // 현재 reader가 가리키는 문자가 공백이 '아니라면'
+        if (*reader != ' ') {
+            *writer = *reader; // writer 위치에 해당 문자를 복사
+            writer++;          // writer 위치를 다음 칸으로 이동
+        }
+        // reader는 공백이든 아니든 항상 다음 문자로 이동
+        reader++;
+    }
+    // 모든 작업이 끝난 후, writer가 가리키는 위치에 널 종료 문자를 추가하여
+    // 새로운 문자열의 끝을 지정합니다.
+    *writer = '\0';
+}
+
 int getNEISTimeTable(int grade, int class) {
     setlocale(LC_ALL, "");
     char full_path[256] = "";
@@ -522,6 +543,7 @@ int getNEISTimeTable(int grade, int class) {
 
         // 날짜, 교시, 수업 내용이 모두 정상적으로 추출되었는지 확인합니다.
         if (date_str && period_str && subject_str) {
+            remove_spaces_inplace(subject_str); // 수업 내용에서 공백 제거(공백 있으면 옆으로 너무 넓어짐)
             // 날짜 문자열로부터 요일 인덱스(월=0 ~ 금=4)를 가져옵니다.
             int day_index = get_weekday(date_str);
             // 교시 문자열을 정수로 변환합니다.
@@ -536,6 +558,8 @@ int getNEISTimeTable(int grade, int class) {
     }
 
     // 채워진 timetable 배열을 형식에 맞게 출력합니다.
+    printf("%d학년 %d반 시간표(%s ~ %s)\n", grade, class, start_date, end_date);
+    printf("---------------------------------------------------------------------\n");
     for (int period = 1; period <= 7; period++) {
         printf("|  %d교시 |", period);
         for (int day = 0; day < 5; day++) {
