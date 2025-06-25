@@ -208,7 +208,7 @@ char* getURL(char *hostname, char *path, int port) { // FIXME: Too short query w
 
     // 7. 소켓 닫기
         close(sockfd);
-        printf("전체 응답 수신 완료. 총 %zu 바이트 수신\n", full_response_size);
+        /*printf("전체 응답 수신 완료. 총 %zu 바이트 수신\n", full_response_size);
 
         // ========================= 진단 코드 추가 =========================
         printf("\n--- 수신된 전체 응답 (헤더 포함) ---\n");
@@ -217,7 +217,7 @@ char* getURL(char *hostname, char *path, int port) { // FIXME: Too short query w
         }
         printf("\n--- 전체 응답 끝 ---\n\n");
         // =================================================================
-
+         */
         // 8. 헤더와 본문 분리
         char *header_end = strstr(full_response, "\r\n\r\n");
         char *response_body = NULL;
@@ -242,7 +242,7 @@ char* getURL(char *hostname, char *path, int port) { // FIXME: Too short query w
         response_body[0] = '\0';
     }
 
-    printf("응답 본문:\n%s\n", response_body);
+    //printf("응답 본문:\n%s\n", response_body);
     // 전체 응답을 저장했던 임시 버퍼는 해제
     free(full_response);
 
@@ -261,7 +261,7 @@ int searchNEISSchool(char *schoolName) {
         return -1; // 검색 실패
     }
     
-    printf("\nJSON 응답:\n%s\n", json_response);
+    //printf("\nJSON 응답:\n%s\n", json_response);
     
     SchoolInfo schools[MAX_SEARCH_RESULTS];
     int num_schools = 0;
