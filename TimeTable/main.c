@@ -22,7 +22,7 @@
 #include "parson.h" // JSON 파싱 라이브러리
 
 
-#define RECV_BUFFER_SIZE 16384 // 서버 응답을 받을 버퍼 크기
+#define RECV_BUFFER_SIZE 8192 // 서버 응답을 받을 버퍼 크기
 // 학교 정보 구조체 정의
 typedef struct {
     char edu_code[16]; // 교육청 코드 (ATPT_OFCDC_SC_CODE)
@@ -40,6 +40,45 @@ char g_selected_school_name[128] = ""; // 선택된 학교 이름
 
 #define MAX_SCHOOLS 100
 #define MAX_FIELD_LEN 128 // 각 필드의 최대 길이
+// 문자열을 퍼센트 인코딩하여 새로운 메모리에 할당 후 반환하는 함수
+char* url_encode(const char *str) {
+    size_t len = strlen(str);
+    size_t encoded_len = 0;
+
+    // 1. 인코딩 후의 최종 길이를 계산
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = str[i];
+        // 알파벳, 숫자, 그리고 일부 특수문자(-, _, ., ~)는 인코딩하지 않음
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            encoded_len++;
+        } else {
+            // 그 외 모든 문자는 '%XX' 형태로 3바이트가 됨
+            encoded_len += 3;
+        }
+    }
+
+    // 2. 최종 길이에 맞게 메모리 할당
+    char *encoded_str = (char *)malloc(encoded_len + 1);
+    if (encoded_str == NULL) {
+        perror("ERROR: url_encode malloc 실패");
+        return NULL;
+    }
+
+    // 3. 실제 인코딩 수행
+    char *p = encoded_str;
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = str[i];
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            *p++ = c;
+        } else {
+            // sprintf를 이용해 '%XX' 형태로 변환하여 버퍼에 씀
+            p += sprintf(p, "%%%02X", c);
+        }
+    }
+    *p = '\0'; // 문자열의 끝을 표시
+
+    return encoded_str;
+}
 
 void trim_whitespace(char *str) {
     if (str == NULL) return;
@@ -64,126 +103,156 @@ void trim_whitespace(char *str) {
     }
 }
 
-char* getURL(char *hostname, char *path, int port) {
+// Gemini Helped me fix this.
+char* getURL(char *hostname, char *path, int port) { // FIXME: Too short query will cause pharsing error since the API will return EXTREMELY long response.
     int sockfd;
     struct sockaddr_in serv_addr;
     struct hostent *server;
-    char request_buffer[RECV_BUFFER_SIZE * 2];
-    char temp_response_buffer[RECV_BUFFER_SIZE];
-    char *response_body = NULL;
-    size_t total_received_size = 0;
-    const char *user_agent_string = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"; // UserAgent 설정(macOS Chrome 기준)
+    char request_buffer[RECV_BUFFER_SIZE]; // 요청 버퍼는 충분히 크게 설정
     
-    // 소켓 생성
+    // 전체 응답을 저장할 동적 버퍼와 관련 변수
+    char *full_response = NULL;
+    size_t full_response_size = 0;
+
+    const char *user_agent_string = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+
+    // 1. 소켓 생성
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
         perror("ERROR: 소켓 생성 실패");
         return NULL;
     }
-    
-    // DNS Lookup
+
+    // 2. DNS Lookup
     server = gethostbyname(hostname);
     if (server == NULL) {
         fprintf(stderr, "ERROR: %s 호스트 찾기 실패\n", hostname);
         close(sockfd);
         return NULL;
     }
-    
-    // 요청 보낼 서버 주소 설정
-    bzero((char *)&serv_addr, sizeof(serv_addr));
+
+    // 3. 요청 보낼 서버 주소 설정 (bzero -> memset, bcopy -> memcpy)
+    memset((char *)&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
-    bcopy((char *)server->h_addr,
-          (char *)&serv_addr.sin_addr.s_addr,
-          server->h_length);
-    serv_addr.sin_port = htons(port); // 호스트 바이트 순서를 네트워크 바이트 순서로 변환
-    
-    // 연결
+    memcpy((char *)&serv_addr.sin_addr.s_addr,
+           (char *)server->h_addr,
+           server->h_length);
+    serv_addr.sin_port = htons(port);
+
+    // 4. 연결
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
         perror("ERROR: 연결 실패");
         close(sockfd);
         return NULL;
     }
-    
-    // 대가리 설정
-    sprintf(request_buffer,
-            "GET %s HTTP/1.1\r\n"
-            "Host: %s\r\n"
-            "User-Agent: %s\r\n" // User-Agent 추가
-            "Connection: close\r\n" // 응답 후 연결 닫기 요청
-            "\r\n", // 대가리 끝 (빈 줄)
-            path, hostname, user_agent_string);
-    
+
+    // 5. HTTP 요청 메시지 생성 및 전송
+    snprintf(request_buffer, sizeof(request_buffer),
+             "GET %s HTTP/1.1\r\n"
+             "Host: %s\r\n"
+             "User-Agent: %s\r\n"
+             "Connection: close\r\n"
+             "\r\n",
+             path, hostname, user_agent_string);
+
     printf("요청 전송\n%s", request_buffer);
-    
+
     if (send(sockfd, request_buffer, strlen(request_buffer), 0) < 0) {
-        perror("소켓 오류");
+        perror("ERROR: 소켓 쓰기 실패");
         close(sockfd);
         return NULL;
     }
-    
-    int bytes_received;
-    char *header_end = NULL;
-    int header_processed = 0;
-    
-    while ((bytes_received = recv(sockfd, temp_response_buffer, RECV_BUFFER_SIZE - 1, 0)) > 0) {
-        // FIXME: Implicit conversion loses integer precision: 'ssize_t' (aka 'long') to 'int'
-        temp_response_buffer[bytes_received] = '\0';
-        
-        if (!header_processed) {
-            // 헤더와 본문 구분자 "\r\n\r\n" 찾기
-            header_end = strstr(temp_response_buffer, "\r\n\r\n");
-            
-            if (header_end) {
-                // 헤더 끝 지점으로부터 본문 시작 위치 계산
-                size_t body_start_offset = (header_end - temp_response_buffer) + 4; // "\r\n\r\n" 길이 포함
-                
-                // 본문 데이터 크기
-                size_t body_chunk_size = bytes_received - body_start_offset;
-                
-                // 응답 본문 저장 공간 초기 할당
-                response_body = (char *)malloc(body_chunk_size + 1);
-                if (response_body == NULL) {
-                    perror("ERROR: malloc 실패");
-                    close(sockfd);
-                    return NULL;
-                }
-                memcpy(response_body, temp_response_buffer + body_start_offset, body_chunk_size);
-                response_body[body_chunk_size] = '\0';
-                total_received_size = body_chunk_size;
-                header_processed = 1;
-            } else {
-                // TODO: 헤더 끝을 찾지 못한 경우 처리
-            }
-        } else {
-            // 이미 헤더가 처리된 경우, 모든 데이터 본문으로 간주
-            response_body = (char *)realloc(response_body, total_received_size + bytes_received + 1);
-            if (response_body == NULL) {
-                perror("ERROR: realloc 실패");
-                close(sockfd);
-                return NULL;
-            }
-            memcpy(response_body + total_received_size, temp_response_buffer, bytes_received);
-            response_body[total_received_size + bytes_received] = '\0';
-            total_received_size += bytes_received;
+
+    // 6. 응답 수신 (수정된 로직)
+    char temp_buffer[RECV_BUFFER_SIZE];
+    ssize_t bytes_received; // 반환 타입에 맞는 변수 타입 사용 (int -> ssize_t)
+
+    // 서버가 연결을 닫을 때까지 모든 데이터를 수신하여 full_response에 추가
+    while ((bytes_received = recv(sockfd, temp_buffer, RECV_BUFFER_SIZE - 1, 0)) > 0) {
+        char *new_response = realloc(full_response, full_response_size + bytes_received);
+        if (new_response == NULL) {
+            perror("ERROR: realloc 실패");
+            free(full_response);
+            close(sockfd);
+            return NULL;
         }
+        full_response = new_response;
+        memcpy(full_response + full_response_size, temp_buffer, bytes_received);
+        full_response_size += bytes_received;
     }
     
     if (bytes_received < 0) {
         perror("ERROR: 소켓 읽기 실패");
-        if (response_body) free(response_body); // 에러 발생 시 할당된 메모리 해제
+        free(full_response);
         close(sockfd);
         return NULL;
     }
-    
+
+    // 수신이 완료된 후, 전체 응답에 널 종료 문자 추가
+    if (full_response) {
+        char *new_response = realloc(full_response, full_response_size + 1);
+        if (new_response == NULL) {
+             perror("ERROR: realloc 실패");
+             free(full_response);
+             close(sockfd);
+             return NULL;
+        }
+        full_response = new_response;
+        full_response[full_response_size] = '\0';
+    } else {
+        // 아무 데이터도 받지 못한 경우
+        printf("응답 수신 실패 (0 바이트).\n");
+        close(sockfd);
+        return NULL;
+    }
+
     // 7. 소켓 닫기
-    close(sockfd);
+        close(sockfd);
+        printf("전체 응답 수신 완료. 총 %zu 바이트 수신\n", full_response_size);
+
+        // ========================= 진단 코드 추가 =========================
+        printf("\n--- 수신된 전체 응답 (헤더 포함) ---\n");
+        if (full_response) {
+            printf("%s", full_response);
+        }
+        printf("\n--- 전체 응답 끝 ---\n\n");
+        // =================================================================
+
+        // 8. 헤더와 본문 분리
+        char *header_end = strstr(full_response, "\r\n\r\n");
+        char *response_body = NULL;
+    if (header_end) {
+        // 헤더 끝 다음부터가 본문의 시작
+        char *body_start = header_end + 4; // "\r\n\r\n" 의 길이 4
+        size_t body_length = full_response_size - (body_start - full_response);
+        
+        response_body = (char *)malloc(body_length + 1);
+        if (response_body == NULL) {
+            perror("ERROR: 본문 메모리 할당 실패");
+            free(full_response);
+            return NULL;
+        }
+        memcpy(response_body, body_start, body_length);
+        response_body[body_length] = '\0';
+    } else {
+        printf("HTTP 응답에서 헤더 구분자를 찾을 수 없음\n");
+        // 본문이 없는 응답일 수 있으므로 full_response 자체를 반환하거나 NULL을 반환할 수 있음
+        // 여기서는 에러로 간주하지 않고 빈 문자열을 할당
+        response_body = (char *)malloc(1);
+        response_body[0] = '\0';
+    }
+
+    printf("응답 본문:\n%s\n", response_body);
+    // 전체 응답을 저장했던 임시 버퍼는 해제
+    free(full_response);
+
     return response_body;
 }
-
 int searchNEISSchool(char *schoolName) {
     char full_path[256];
+    char *encodedSchoolName = url_encode(schoolName);
     
-    sprintf(full_path, "/https://hello.jsna.dev/lunch/api/search-hakgyo.php?sc=%s", schoolName);
+    sprintf(full_path, "/https://hello.jsna.dev/lunch/api/search-hakgyo.php?sc=%s", encodedSchoolName);
     
     char* json_response = getURL("cors-proxy.jsna.workers.dev", full_path, 80);
     
@@ -569,8 +638,7 @@ int getNEISTimeTable(int grade, int class) {
             char print_date[50] = "";
             strcpy(print_date, date[day]);
             strcat(print_date, "(오늘)"); // 오늘 날짜 표시
-            print_padded_cell(&print_date, max_width, 1); // 오늘이면 # 추가
-            // FIXME: Incompatible pointer types passing 'char (*)[50]' to parameter of type 'const char *'
+            print_padded_cell(print_date, max_width, 1); // 오늘이면 # 추가
         } else {
             print_padded_cell(date[day], max_width, 0); // 오늘이 아니면 그냥 출력
         }
